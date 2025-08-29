@@ -573,7 +573,8 @@ simdjson_unused simdjson_inline simdjson_result<number_type> get_number_type(con
 //
 // Our objective is accurate parsing (ULP of 0) at high speed.
 template<typename W>
-simdjson_inline error_code parse_number(const uint8_t *const src, W &writer) {
+simdjson_inline error_code parse_number(const uint8_t *const src, uint32_t *cnt, W &writer) {
+  const uint8_t *start = src;
   //
   // Check for minus sign
   //
@@ -613,6 +614,7 @@ simdjson_inline error_code parse_number(const uint8_t *const src, W &writer) {
     const bool dirty_end = jsoncharutils::is_not_structural_or_whitespace(*p);
     SIMDJSON_TRY( write_float(src, negative, i, start_digits, digit_count, exponent, writer) );
     if (dirty_end) { return INVALID_NUMBER(src); }
+    *cnt = (uint32_t)(p - start);
     return SUCCESS;
   }
 
@@ -627,6 +629,7 @@ simdjson_inline error_code parse_number(const uint8_t *const src, W &writer) {
       if (i > uint64_t(INT64_MAX)+1) { return BIGINT_NUMBER(src);  }
       WRITE_INTEGER(~i+1, src, writer);
       if (jsoncharutils::is_not_structural_or_whitespace(*p)) { return INVALID_NUMBER(src); }
+      *cnt = (uint32_t)(p - start);
       return SUCCESS;
     // Positive overflow check:
     // - A 20 digit number starting with 2-9 is overflow, because 18,446,744,073,709,551,615 is the
@@ -659,6 +662,7 @@ simdjson_inline error_code parse_number(const uint8_t *const src, W &writer) {
 #endif
   }
   if (jsoncharutils::is_not_structural_or_whitespace(*p)) { return INVALID_NUMBER(src); }
+  *cnt = (uint32_t)(p - start);
   return SUCCESS;
 }
 

@@ -585,7 +585,7 @@ simdjson_inline simdjson_result<number_type> value_iterator::get_number_type() n
 }
 simdjson_inline simdjson_result<number> value_iterator::get_number() noexcept {
   number num;
-  error_code error =  numberparsing::parse_number(peek_non_root_scalar("number"), num);
+  error_code error = numberparsing::parse_number(peek_non_root_scalar("number"), nullptr, num);
   if(error) { return error; }
   return num;
 }
@@ -646,7 +646,7 @@ simdjson_inline simdjson_result<number> value_iterator::get_root_number(bool che
     return NUMBER_ERROR;
   }
   number num;
-  error_code error =  numberparsing::parse_number(tmpbuf, num);
+  error_code error = numberparsing::parse_number(tmpbuf, nullptr, num);
   if(error) { return error; }
   if (check_trailing && !_json_iter->is_single_token()) { return TRAILING_CONTENT; }
   advance_root_scalar("number");

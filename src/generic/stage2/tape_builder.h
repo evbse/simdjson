@@ -23,6 +23,9 @@ struct tape_builder {
   simdjson_warn_unused static simdjson_inline error_code parse_document(
     dom_parser_implementation &dom_parser,
     dom::document &doc) noexcept;
+  simdjson_warn_unused static simdjson_inline error_code parse(
+    dom_parser_implementation &dom_parser,
+    dom::document &doc) noexcept;
 
   /** Called when a non-empty document starts. */
   simdjson_warn_unused simdjson_inline error_code visit_document_start(json_iterator &iter) noexcept;
@@ -33,7 +36,7 @@ struct tape_builder {
   simdjson_warn_unused simdjson_inline error_code visit_array_start(json_iterator &iter) noexcept;
   /** Called when a non-empty array ends. */
   simdjson_warn_unused simdjson_inline error_code visit_array_end(json_iterator &iter) noexcept;
-  /** Called when an empty array is found. */
+    /** Called when an empty array is found. */
   simdjson_warn_unused simdjson_inline error_code visit_empty_array(json_iterator &iter) noexcept;
 
   /** Called when a non-empty object starts. */
@@ -105,6 +108,15 @@ simdjson_warn_unused simdjson_inline error_code tape_builder::parse_document(
   return iter.walk_document<STREAMING>(builder);
 }
 
+simdjson_warn_unused simdjson_inline error_code tape_builder::parse(
+    dom_parser_implementation &dom_parser,
+    dom::document &doc) noexcept {
+  dom_parser.doc = &doc;
+  json_iterator iter(dom_parser, 0);
+  tape_builder builder(doc);
+  return iter.parse(builder);
+}
+
 simdjson_warn_unused simdjson_inline error_code tape_builder::visit_root_primitive(json_iterator &iter, const uint8_t *value) noexcept {
   return iter.visit_root_primitive(*this, value);
 }
@@ -157,11 +169,13 @@ simdjson_inline tape_builder::tape_builder(dom::document &doc) noexcept : tape{d
 simdjson_warn_unused simdjson_inline error_code tape_builder::visit_string(json_iterator &iter, const uint8_t *value, bool key) noexcept {
   iter.log_value(key ? "key" : "string");
   uint8_t *dst = on_start_string(iter);
-  dst = stringparsing::parse_string(value+1, dst, false); // We do not allow replacement when the escape characters are invalid.
+  uint32_t cnt;
+  dst = stringparsing::parse_string(value+1, dst, &cnt, false); // We do not allow replacement when the escape characters are invalid.
   if (dst == nullptr) {
     iter.log_error("Invalid escape in string");
     return STRING_ERROR;
   }
+  iter.idx += cnt + 2;
   on_end_string(dst);
   return SUCCESS;
 }
@@ -172,7 +186,11 @@ simdjson_warn_unused simdjson_inline error_code tape_builder::visit_root_string(
 
 simdjson_warn_unused simdjson_inline error_code tape_builder::visit_number(json_iterator &iter, const uint8_t *value) noexcept {
   iter.log_value("number");
-  return numberparsing::parse_number(value, tape);
+  uint32_t cnt;
+  auto error = numberparsing::parse_number(value, &cnt, tape);
+  if (error) { return error; }
+  iter.idx += cnt;
+  return SUCCESS;
 }
 
 simdjson_warn_unused simdjson_inline error_code tape_builder::visit_root_number(json_iterator &iter, const uint8_t *value) noexcept {
@@ -201,6 +219,7 @@ simdjson_warn_unused simdjson_inline error_code tape_builder::visit_true_atom(js
   iter.log_value("true");
   if (!atomparsing::is_valid_true_atom(value)) { return T_ATOM_ERROR; }
   tape.append(0, internal::tape_type::TRUE_VALUE);
+  iter.idx += 4;
   return SUCCESS;
 }
 
@@ -215,6 +234,7 @@ simdjson_warn_unused simdjson_inline error_code tape_builder::visit_false_atom(j
   iter.log_value("false");
   if (!atomparsing::is_valid_false_atom(value)) { return F_ATOM_ERROR; }
   tape.append(0, internal::tape_type::FALSE_VALUE);
+  iter.idx += 5;
   return SUCCESS;
 }
 
@@ -229,6 +249,7 @@ simdjson_warn_unused simdjson_inline error_code tape_builder::visit_null_atom(js
   iter.log_value("null");
   if (!atomparsing::is_valid_null_atom(value)) { return N_ATOM_ERROR; }
   tape.append(0, internal::tape_type::NULL_VALUE);
+  iter.idx += 4;
   return SUCCESS;
 }
 

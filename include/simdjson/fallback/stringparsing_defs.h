@@ -12,21 +12,45 @@ namespace {
 // Holds backslashes and quotes locations.
 struct backslash_and_quote {
 public:
-  static constexpr uint32_t BYTES_PROCESSED = 1;
+  static constexpr uint32_t BYTES_PROCESSED = 8;
   simdjson_inline static backslash_and_quote copy_and_find(const uint8_t *src, uint8_t *dst);
 
-  simdjson_inline bool has_quote_first() { return c == '"'; }
-  simdjson_inline bool has_backslash() { return c == '\\'; }
-  simdjson_inline int quote_index() { return c == '"' ? 0 : 1; }
-  simdjson_inline int backslash_index() { return c == '\\' ? 0 : 1; }
+  simdjson_inline bool has_quote_first() { return qt_first; }
+  simdjson_inline bool has_backslash() { return bs_first; }
+  simdjson_inline int quote_index() { return qt_index; }
+  simdjson_inline int backslash_index() { return bs_index; }
 
-  uint8_t c;
+  bool qt_first;
+  int qt_index;
+  bool bs_first;
+  int bs_index;
+
 }; // struct backslash_and_quote
 
 simdjson_inline backslash_and_quote backslash_and_quote::copy_and_find(const uint8_t *src, uint8_t *dst) {
   // store to dest unconditionally - we can overwrite the bits we don't like later
-  dst[0] = src[0];
-  return { src[0] };
+  uint64_t c;
+  std::memcpy(&c, src, 8);
+  std::memcpy(dst, src, 8);
+
+  uint64_t QUOTE = 0x2222222222222222;
+  uint64_t BACKSLASH = 0x5c5c5c5c5c5c5c5c;
+
+  uint64_t qt = c ^ QUOTE;
+  uint64_t bs = c ^ BACKSLASH;
+  uint64_t has_zero = ((qt - 0x0101010101010101) & ~qt & 0x8080808080808080) |
+                      ((bs - 0x0101010101010101) & ~bs & 0x8080808080808080);
+
+  if (has_zero) {
+    for (int i = 0; i < 8; i += 1) {
+      if (src[i] == '"')
+        return { true, i, false, -1 };
+      if (src[i] == '\\')
+        return { false, -1, true, i };
+    }
+  }
+
+  return { false, -1, false, -1 };
 }
 
 

@@ -95,7 +95,7 @@ protected:
   template<typename W>
   friend error_code numberparsing::write_float(const uint8_t *const src, bool negative, uint64_t i, const uint8_t * start_digits, size_t digit_count, int64_t exponent, W &writer);
   template<typename W>
-  friend error_code numberparsing::parse_number(const uint8_t *const src, W &writer);
+  friend error_code numberparsing::parse_number(const uint8_t *const src, uint32_t *cnt, W &writer);
   /** Store a signed 64-bit value to the number. */
   simdjson_inline void append_s64(int64_t value) noexcept;
   /** Store an unsigned 64-bit value to the number. */
